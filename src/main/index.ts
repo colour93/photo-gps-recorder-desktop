@@ -4,6 +4,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { readdirSync } from 'fs'
 import { RAW_FILE_EXT_LIST } from './consts'
+import { exiftool } from 'exiftool-vendored'
 
 function createWindow(): void {
   // Create the browser window.
@@ -60,14 +61,22 @@ app.whenReady().then(() => {
 
     const folderPath = result.filePaths[0]
 
-    const fileList = readdirSync(folderPath)
-      .filter((fileName) => RAW_FILE_EXT_LIST.includes(path.extname(fileName).toUpperCase()))
-      .map((fileName) => {
-        return {
-          fileName,
-          filePath: path.resolve(folderPath, fileName)
+    const fileList: object[] = []
+    for (const fileName of readdirSync(folderPath).filter((fileName) =>
+      RAW_FILE_EXT_LIST.includes(path.extname(fileName).toUpperCase())
+    )) {
+      const filePath = path.resolve(folderPath, fileName)
+      const { GPSLatitude, GPSLongitude, GPSAltitude } = await exiftool.read(filePath)
+      fileList.push({
+        fileName,
+        filePath,
+        metadata: {
+          GPSLatitude,
+          GPSLongitude,
+          GPSAltitude
         }
       })
+    }
 
     return {
       folderPath,
@@ -88,9 +97,7 @@ app.whenReady().then(() => {
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
+  app.quit()
 })
 
 // In this file you can include the rest of your app"s specific main process
