@@ -1,11 +1,11 @@
 import { Tags } from 'exiftool-vendored'
 
-export type SelectFolderResult = {
+export type FolderData = {
   folderPath: string
-  fileList: SelectFolderFile[]
+  fileList: FolderFile[]
 }
 
-export type SelectFolderFile = {
+export type FolderFile = {
   fileName: string
   filePath: string
   metadata: Partial<Tags>

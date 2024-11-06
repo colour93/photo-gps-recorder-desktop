@@ -5,6 +5,12 @@ import icon from '../../resources/icon.png?asset'
 import { readdirSync } from 'fs'
 import { RAW_FILE_EXT_LIST } from './consts'
 import { exiftool } from 'exiftool-vendored'
+import * as csv from 'fast-csv'
+import { ProcessService } from './service'
+import { FolderFile } from './typings/FolderData'
+import { LocationData } from './typings/Location'
+
+const processService = new ProcessService()
 
 function createWindow(): void {
   // Create the browser window.
@@ -29,6 +35,10 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
+  processService.onProcessUpdate((data) => {
+    mainWindow.webContents.send('event:processDataUpdate', data)
+  })
+
   // HMR for renderer base on electron-vite cli.
   // Load the remote URL for development or the local html file for production.
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
@@ -43,7 +53,7 @@ function createWindow(): void {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   // Set app user model id for windows
-  electronApp.setAppUserModelId('com.electron')
+  electronApp.setAppUserModelId('icu.fur93.photo-gps-recorder.desktop')
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.
@@ -57,31 +67,83 @@ app.whenReady().then(() => {
       properties: ['openDirectory']
     })
 
-    if (result.filePaths.length != 1) return undefined
+    if (result.filePaths.length != 1) return
 
     const folderPath = result.filePaths[0]
 
-    const fileList: object[] = []
-    for (const fileName of readdirSync(folderPath).filter((fileName) =>
-      RAW_FILE_EXT_LIST.includes(path.extname(fileName).toUpperCase())
+    const fileList: FolderFile[] = []
+    for (const fileName of readdirSync(folderPath).filter(
+      (fileName) =>
+        !fileName.startsWith('._') &&
+        RAW_FILE_EXT_LIST.includes(path.extname(fileName).toUpperCase())
     )) {
       const filePath = path.resolve(folderPath, fileName)
-      const { GPSLatitude, GPSLongitude, GPSAltitude } = await exiftool.read(filePath)
+      const { GPSLatitude, GPSLongitude, GPSAltitude, DateTimeOriginal } =
+        await exiftool.read(filePath)
       fileList.push({
         fileName,
         filePath,
         metadata: {
           GPSLatitude,
           GPSLongitude,
-          GPSAltitude
+          GPSAltitude,
+          DateTimeOriginal
         }
       })
     }
 
-    return {
+    processService.setFolderData({
       folderPath,
       fileList
+    })
+
+    return processService.folderData
+  })
+
+  ipcMain.handle('dialog:selectCsv', async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: [{ name: 'PGR CSV Data File', extensions: ['csv'] }]
+    })
+
+    if (result.filePaths.length != 1) return undefined
+
+    const csvPath = result.filePaths[0]
+
+    return new Promise((resolve) => {
+      const data: LocationData[] = []
+      csv
+        .parseFile(csvPath, { ignoreEmpty: true })
+        .on('data', (row) => {
+          if (row.length != 5) return
+          const [time, lat, lng, alt, type] = row
+          data.push({
+            time: new Date(time),
+            lat: Number(lat),
+            lng: Number(lng),
+            alt: Number(alt),
+            type
+          })
+        })
+        .on('end', () => {
+          processService.setCsvData({
+            filePath: csvPath,
+            locationDataList: data.sort((a, b) => a.time.getTime() - b.time.getTime())
+          })
+          resolve(processService.csvData)
+        })
+    })
+  })
+
+  ipcMain.handle('event:getData', () => {
+    return {
+      folderData: processService.folderData,
+      csvData: processService.csvData
     }
+  })
+
+  ipcMain.handle('event:process', () => {
+    processService.process()
   })
 
   createWindow()

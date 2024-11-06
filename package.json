@@ -21,11 +21,13 @@
     "build:linux": "electron-vite build && electron-builder --linux"
   },
   "dependencies": {
+    "@douyinfe/semi-icons": "^2.68.4",
     "@douyinfe/semi-ui": "^2.68.4",
     "@electron-toolkit/preload": "^3.0.1",
     "@electron-toolkit/utils": "^3.0.0",
     "electron-updater": "^6.1.7",
-    "exiftool-vendored": "^29.0.0"
+    "exiftool-vendored": "^29.0.0",
+    "fast-csv": "^5.0.2"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "^2.0.0",
